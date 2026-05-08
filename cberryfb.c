@@ -94,25 +94,7 @@ struct cberryfb {
 
 	u32			palette[16];
 	u8			brightness;
-	bool			backlight_armed;
 };
-
-/* ------------------------------------------------------------------ */
-/* Module parameters                                                  */
-/* ------------------------------------------------------------------ */
-
-static unsigned int fps = CBERRY_DEFAULT_FPS;
-module_param(fps, uint, 0444);
-MODULE_PARM_DESC(fps, "Maximum deferred-IO frame rate (1..60, default 25)");
-
-static unsigned int brightness = RAIO_BL_PWM_MAX;
-module_param(brightness, uint, 0644);
-MODULE_PARM_DESC(brightness,
-	"Backlight value applied after the first frame is rendered (0..255, default 255). Set to 0 to keep the panel dark until userspace writes /sys/class/backlight/cberryfb/brightness.");
-
-/* Forward declaration: backlight helper is defined below but needs to be
- * callable from the deferred-IO path. */
-static int cberryfb_set_backlight(struct cberryfb *cb, u8 value);
 
 /* ------------------------------------------------------------------ */
 /* Low-level bus helpers                                              */
@@ -210,7 +192,6 @@ static void cberryfb_update_display(struct fb_info *info)
 	const u16 *src = (const u16 *)info->screen_buffer;
 	size_t pixels = (size_t)DISPLAY_WIDTH * DISPLAY_HEIGHT;
 	size_t i;
-	bool arm_backlight = false;
 
 	mutex_lock(&cb->io_lock);
 
@@ -232,23 +213,8 @@ static void cberryfb_update_display(struct fb_info *info)
 	gpiod_set_value_cansleep(cb->cs, 0);
 	gpiod_set_value_cansleep(cb->oe, 0);
 
-	/* First frame finished latching — defer the backlight ramp until
-	 * the bus is released (cberryfb_set_backlight takes io_lock). */
-	if (!cb->backlight_armed) {
-		cb->backlight_armed = true;
-		arm_backlight = brightness > 0;
-	}
-
 out:
 	mutex_unlock(&cb->io_lock);
-
-	if (arm_backlight) {
-		u8 v = clamp_t(unsigned int, brightness, 0, RAIO_BL_PWM_MAX);
-
-		cberryfb_set_backlight(cb, v);
-		if (info->bl_dev)
-			info->bl_dev->props.brightness = v;
-	}
 }
 
 /* ------------------------------------------------------------------ */
@@ -372,9 +338,8 @@ static int cberryfb_bl_update_status(struct backlight_device *bdev)
 	    bdev->props.state & (BL_CORE_SUSPENDED | BL_CORE_FBBLANK))
 		value = 0;
 
-	dev_dbg(&cb->spi->dev, "backlight: req=%u state=%u power=%u -> pwm=%u\n",
-		bdev->props.brightness, bdev->props.state,
-		bdev->props.power, value);
+	if (value == cb->brightness)
+		return 0;
 
 	return cberryfb_set_backlight(cb, value);
 }
@@ -473,6 +438,10 @@ out:
 /* Probe / remove                                                     */
 /* ------------------------------------------------------------------ */
 
+static unsigned int fps = CBERRY_DEFAULT_FPS;
+module_param(fps, uint, 0444);
+MODULE_PARM_DESC(fps, "Maximum frame rate of deferred IO updates");
+
 static int cberryfb_request_gpios(struct cberryfb *cb)
 {
 	struct device *dev = &cb->spi->dev;
@@ -502,7 +471,12 @@ static int cberryfb_request_gpios(struct cberryfb *cb)
 	if (IS_ERR(cb->rd))
 		return dev_err_probe(dev, PTR_ERR(cb->rd), "rd-gpios\n");
 
-	cb->reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
+	/* Park the chip in reset right when we claim the GPIO. The C-Berry HAT
+	 * shares the Pi's 5 V rail and has no power switch, so the RAIO retains
+	 * its register state (incl. PWM duty) across `poweroff`/reboot. Holding
+	 * the controller in reset until cberryfb_hard_reset() runs guarantees
+	 * a clean slate — no stale backlight, no stale framebuffer contents. */
+	cb->reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(cb->reset))
 		return dev_err_probe(dev, PTR_ERR(cb->reset), "reset-gpios\n");
 
@@ -614,10 +588,32 @@ static void cberryfb_remove(struct spi_device *spi)
 	struct fb_info *info = cb->info;
 	void *vmem = info->screen_buffer;
 
+	/* Drop the backlight to 0 and put the controller back into reset.
+	 * The HAT keeps 5 V even after `poweroff` on Pi 3A+ (no power switch),
+	 * so without these two writes the panel would keep displaying the
+	 * last frame at the last brightness until the USB cable is unplugged. */
+	cberryfb_set_backlight(cb, 0);
+	gpiod_set_value_cansleep(cb->reset, 1);
+
 	unregister_framebuffer(info);
 	fb_deferred_io_cleanup(info);
 	framebuffer_release(info);
 	vfree(vmem);
+}
+
+static void cberryfb_shutdown(struct spi_device *spi)
+{
+	struct cberryfb *cb = spi_get_drvdata(spi);
+
+	if (!cb)
+		return;
+
+	/* poweroff/reboot: same cleanup as remove() but the device tree is
+	 * still live so we can talk to the bus. Without this hook, systemd
+	 * shutdown leaves the panel lit at last brightness because remove()
+	 * is only invoked on rmmod, never on system halt. */
+	cberryfb_set_backlight(cb, 0);
+	gpiod_set_value_cansleep(cb->reset, 1);
 }
 
 static const struct of_device_id cberryfb_of_match[] = {
@@ -640,6 +636,7 @@ static struct spi_driver cberryfb_driver = {
 	.id_table	= cberryfb_spi_ids,
 	.probe		= cberryfb_probe,
 	.remove		= cberryfb_remove,
+	.shutdown	= cberryfb_shutdown,
 };
 module_spi_driver(cberryfb_driver);
 
