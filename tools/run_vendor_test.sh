@@ -62,9 +62,20 @@ free_hardware() {
 do_build() {
     cd "$VENDOR_DIR"
     echo "==> building vendor demo in $VENDOR_DIR"
-    # Original makefile uses 4-space tabs and -lbcm2835; works as-is on Pi.
+
+    # Vendor SDK is from 2013 (gcc 4.6) and has minor sloppiness that
+    # modern gcc rejects: Draw_Circle is defined in RAIO8870.c but never
+    # declared in RAIO8870.h. Patch the header once if needed.
+    if ! grep -q "Draw_Circle" RAIO8870.h; then
+        echo "==> adding missing Draw_Circle prototype to RAIO8870.h"
+        # Insert the prototype right after the Draw_Line declaration.
+        sed -i '/^void Draw_Line(/a void Draw_Circle( uint16_t X1, uint16_t Y1, uint8_t rad );' \
+            RAIO8870.h
+    fi
+
+    # Force lenient compile flags (suppress new gcc warnings-as-errors).
     make clean >/dev/null 2>&1 || true
-    make
+    make CFLAGS="-Os -Wno-implicit-function-declaration -Wno-int-conversion"
     echo "==> built $VENDOR_DIR/tft_test"
 }
 
