@@ -31,10 +31,15 @@ need_root() {
 }
 
 ensure_pkg() {
-    if ! command -v fbterm >/dev/null 2>&1; then
-        echo "==> installing fbterm"
+    local missing=()
+    command -v fbterm >/dev/null 2>&1 || missing+=(fbterm)
+    # ncurses-term ships the 'fbterm' terminfo entry; without it htop /
+    # btop / less etc. complain about an unknown TERM and refuse to draw.
+    [[ -f /usr/share/terminfo/f/fbterm ]] || missing+=(ncurses-term)
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "==> installing ${missing[*]}"
         apt-get update -qq
-        apt-get install -y -qq fbterm
+        apt-get install -y -qq "${missing[@]}"
     fi
 }
 
@@ -77,6 +82,7 @@ PrivateMounts=yes
 BindPaths=/dev/fb1:/dev/fb0
 Environment=TERM=linux
 ExecStart=/usr/bin/fbterm --font-size=${DEFAULT_FONT_SIZE} -- /bin/su - ${USER_NAME}
+ExecStartPost=/usr/bin/chvt 2
 Type=idle
 Restart=always
 RestartSec=2
