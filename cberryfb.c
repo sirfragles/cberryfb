@@ -424,13 +424,15 @@ static int cberryfb_raio_init(struct cberryfb *cb)
 
 	cberryfb_set_register(cb, RAIO_PCLK, 0x00);
 
-	/* Do NOT touch the backlight PWM here. After hard_reset the PWM1
-	 * block is disabled, so the backlight LED driver sees no clocked
-	 * signal and stays off. Enabling PWM1 (P1CR) before writing P1DCR
-	 * was lighting the panel briefly during probe because the chip
-	 * latches the previous duty register for one cycle. The backlight
-	 * comes on later, via cberryfb_set_backlight(), once userspace
-	 * writes a non-zero value to /sys/class/backlight/cberryfb/brightness. */
+	/* Force the backlight PWM into a known-OFF state. RAIO8870's reset
+	 * default for P1CR/P1DCR is documented as 0x00 (PWM disabled, output
+	 * low) but some HAT revisions still latch the LED driver enable
+	 * high after hard_reset, lighting the panel as soon as raio_init
+	 * enables PWRR/IODR below. Writing duty=0 first and then disabling
+	 * PWM unconditionally guarantees the LED is dark when we hand off
+	 * to userspace. cberryfb_set_backlight() turns it back on later. */
+	cberryfb_set_register(cb, RAIO_P1DCR, 0x00);
+	cberryfb_set_register(cb, RAIO_P1CR,  0x00);
 	cb->brightness = 0;
 
 	/* Clear the on-controller memory with the background colour. */
@@ -640,6 +642,7 @@ static void cberryfb_shutdown(struct spi_device *spi)
 	if (!cb)
 		return;
 
+	dev_info(&spi->dev, "shutdown: parking RAIO chip (display+PWM off)\n");
 	cberryfb_park_chip(cb);
 }
 
