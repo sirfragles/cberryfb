@@ -12,7 +12,13 @@
 
 ifneq ($(KERNELRELEASE),)
 # -- Called from kernel build system --
+# In-tree build (CONFIG_FB_CBERRY set by Kconfig); standalone build
+# (no CONFIG_FB_CBERRY) falls back to obj-m so `make M=...` works.
+ifdef CONFIG_FB_CBERRY
 obj-$(CONFIG_FB_CBERRY) += cberryfb.o
+else
+obj-m += cberryfb.o
+endif
 
 else
 # -- Standalone build on a Pi (or any system with kernel headers) --
