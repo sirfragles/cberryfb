@@ -30,7 +30,8 @@ do_install() {
     if [[ ! -x $BIN ]]; then
         echo "==> installing build deps"
         apt-get update -qq
-        apt-get install -y -qq git cmake build-essential libbsd-dev
+        apt-get install -y -qq git cmake build-essential libbsd-dev \
+            libraspberrypi-dev libraspberrypi0
         local tmp
         tmp=$(mktemp -d)
         git clone --depth=1 "$SRC" "$tmp/raspi2fb"
