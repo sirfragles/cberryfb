@@ -372,8 +372,9 @@ static int cberryfb_bl_update_status(struct backlight_device *bdev)
 	    bdev->props.state & (BL_CORE_SUSPENDED | BL_CORE_FBBLANK))
 		value = 0;
 
-	if (value == cb->brightness)
-		return 0;
+	dev_dbg(&cb->spi->dev, "backlight: req=%u state=%u power=%u -> pwm=%u\n",
+		bdev->props.brightness, bdev->props.state,
+		bdev->props.power, value);
 
 	return cberryfb_set_backlight(cb, value);
 }
