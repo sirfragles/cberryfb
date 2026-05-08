@@ -340,6 +340,67 @@ def phase_reset(panel: Panel) -> None:
         fail("RAIO WAIT stayed low — chip not responding (power / wiring)")
 
 
+def phase_handshake(panel: Panel) -> None:
+    """
+    Definitive test that the RAIO actually receives our commands.
+
+    The pull-up on WAIT will read HIGH whether or not the chip is
+    present, so the only honest test is to make RAIO drive WAIT LOW
+    and watch it from a *floating* input. The MCLR command (0x8E with
+    bit7=1) starts an internal memory-clear cycle that holds WAIT low
+    for ~50-100 ms.
+
+    1. Disable internal pull on GPIO22, switch it to floating input.
+    2. Read baseline level a few times.
+    3. Issue MCLR=0x80, immediately sample WAIT for 200 ms.
+    4. If we observe a LOW pulse — RAIO is *definitely* listening.
+       If WAIT never drops — communication is dead even though the
+       Pi side looks fine.
+    """
+    step("Communication handshake (MCLR busy pulse on floating WAIT)")
+
+    # Re-program WAIT pin without internal pull. RPi.GPIO doesn't expose
+    # PUD_OFF reliably across versions, so use raspi-gpio if available.
+    import subprocess, shutil
+    if shutil.which("raspi-gpio"):
+        subprocess.run(["raspi-gpio", "set", str(WAIT_PIN), "ip", "pn"],
+                       check=False)
+        ok("set GPIO22 to input, no pull (raspi-gpio)")
+    else:
+        warn("raspi-gpio not found; pull-up still active, "
+             "test result may be a false positive")
+
+    # baseline
+    base_high = sum(GPIO.input(WAIT_PIN) for _ in range(20)) / 20.0
+    print(f"  WAIT baseline (no command): {base_high*100:.0f}% high "
+          f"over 20 samples")
+
+    # fire MCLR and sample as fast as we can for 200 ms
+    panel.set_reg(REG_MCLR, 0x80)
+    deadline = time.monotonic() + 0.2
+    samples = []
+    while time.monotonic() < deadline:
+        samples.append(GPIO.input(WAIT_PIN))
+
+    low_count = samples.count(0)
+    pct_low = 100.0 * low_count / max(1, len(samples))
+    print(f"  WAIT during MCLR: {pct_low:.0f}% low across "
+          f"{len(samples)} samples")
+
+    if low_count > len(samples) * 0.05:
+        ok("WAIT was driven LOW by RAIO during MCLR — communication "
+           "is REAL (chip listens, busy-line works)")
+    else:
+        fail("WAIT never went low during MCLR — RAIO is NOT receiving "
+             "our writes (despite passing earlier checks). Likely: "
+             "level shifter / 5V rail / FFC seating / dead chip.")
+
+    # restore pull-up for the rest of the script
+    if shutil.which("raspi-gpio"):
+        subprocess.run(["raspi-gpio", "set", str(WAIT_PIN), "ip", "pu"],
+                       check=False)
+
+
 def phase_backlight(panel: Panel) -> None:
     step("Backlight ramp test (look at the panel!)")
     print("  Setting backlight 0 → 255 → 0 → 255. Each step ~0.5 s.")
@@ -411,6 +472,7 @@ def main() -> int:
     ap.add_argument("--speed", type=int, default=8_000_000,
                     help="SPI clock in Hz (default 8 MHz)")
     ap.add_argument("--step", choices=["env", "spidev", "gpios", "reset",
+                                       "handshake",
                                        "backlight", "init", "pattern", "all"],
                     default="all")
     ap.add_argument("--pattern", default="cycle",
@@ -439,6 +501,8 @@ def main() -> int:
             phase_reset(panel)
         if args.step in ("init", "all"):
             phase_init(panel)
+        if args.step in ("handshake", "all"):
+            phase_handshake(panel)
         if args.step in ("backlight", "all"):
             phase_backlight(panel)
         if args.step in ("pattern", "all"):
