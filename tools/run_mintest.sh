@@ -5,7 +5,13 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
-if ! ldconfig -p | grep -q libbcm2835; then
+have_bcm2835() {
+    [[ -f /usr/local/include/bcm2835.h || -f /usr/include/bcm2835.h ]] && \
+    ls /usr/local/lib/libbcm2835.* /usr/lib/libbcm2835.* \
+        /usr/lib/*/libbcm2835.* 2>/dev/null | grep -q .
+}
+
+if ! have_bcm2835; then
     echo "libbcm2835 missing — run tools/run_vendor_test.sh first" >&2
     exit 1
 fi

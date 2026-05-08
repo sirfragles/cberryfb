@@ -15,9 +15,30 @@ if [[ ! -d "$VENDOR" ]]; then
     exit 1
 fi
 
-if ! ldconfig -p | grep -q libbcm2835; then
-    echo "libbcm2835 missing — run tools/run_vendor_test.sh once first" >&2
-    exit 1
+have_bcm2835() {
+    [[ -f /usr/local/include/bcm2835.h || -f /usr/include/bcm2835.h ]] && \
+    ls /usr/local/lib/libbcm2835.* /usr/lib/libbcm2835.* \
+        /usr/lib/*/libbcm2835.* 2>/dev/null | grep -q .
+}
+
+if ! have_bcm2835; then
+    echo "==> libbcm2835 missing, installing from upstream"
+    if [[ $EUID -ne 0 ]]; then
+        echo "must run as root to install libbcm2835" >&2
+        exit 1
+    fi
+    tmp=$(mktemp -d)
+    pushd "$tmp" >/dev/null
+    curl -sSL http://www.airspayce.com/mikem/bcm2835/bcm2835-1.75.tar.gz \
+        -o bcm2835.tar.gz
+    tar xzf bcm2835.tar.gz
+    cd bcm2835-*/
+    ./configure --prefix=/usr/local
+    make -j"$(nproc)"
+    make install
+    ldconfig
+    popd >/dev/null
+    rm -rf "$tmp"
 fi
 
 echo "==> build (linking vendor tft.c + RAIO8870.c)"
