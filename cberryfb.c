@@ -594,18 +594,38 @@ err_release:
 	return ret;
 }
 
+/* Put the RAIO controller into a state that survives reboot/poweroff
+ * with the display off. The C-Berry HAT shares the Pi's 5 V rail and
+ * has no power switch, so register contents persist across software
+ * resets/reboots until the USB cable is unplugged. The next boot would
+ * therefore see the panel lit at whatever PWM and display state we left
+ * behind — unless we explicitly disable display + PWM here. */
+static void cberryfb_park_chip(struct cberryfb *cb)
+{
+	cberryfb_set_backlight(cb, 0);
+
+	mutex_lock(&cb->io_lock);
+	/* PWRR bit 7 = display enable. Clear it so the panel pixels go
+	 * black even if the framebuffer/PWM regs survive the reboot. */
+	cberryfb_set_register(cb, RAIO_PWRR, 0x00);
+	/* IODR controls the panel I/O drivers; zeroing it stops the chip
+	 * driving the LCD glass at all. */
+	cberryfb_set_register(cb, RAIO_IODR, 0x00);
+	mutex_unlock(&cb->io_lock);
+
+	/* Finally re-assert RST. On the next boot, even if 5 V never
+	 * dropped, the chip will be in a defined off state until our
+	 * driver probes and runs cberryfb_raio_init() again. */
+	gpiod_set_value_cansleep(cb->reset, 1);
+}
+
 static void cberryfb_remove(struct spi_device *spi)
 {
 	struct cberryfb *cb = spi_get_drvdata(spi);
 	struct fb_info *info = cb->info;
 	void *vmem = info->screen_buffer;
 
-	/* Drop the backlight to 0 and put the controller back into reset.
-	 * The HAT keeps 5 V even after `poweroff` on Pi 3A+ (no power switch),
-	 * so without these two writes the panel would keep displaying the
-	 * last frame at the last brightness until the USB cable is unplugged. */
-	cberryfb_set_backlight(cb, 0);
-	gpiod_set_value_cansleep(cb->reset, 1);
+	cberryfb_park_chip(cb);
 
 	unregister_framebuffer(info);
 	fb_deferred_io_cleanup(info);
@@ -620,12 +640,7 @@ static void cberryfb_shutdown(struct spi_device *spi)
 	if (!cb)
 		return;
 
-	/* poweroff/reboot: same cleanup as remove() but the device tree is
-	 * still live so we can talk to the bus. Without this hook, systemd
-	 * shutdown leaves the panel lit at last brightness because remove()
-	 * is only invoked on rmmod, never on system halt. */
-	cberryfb_set_backlight(cb, 0);
-	gpiod_set_value_cansleep(cb->reset, 1);
+	cberryfb_park_chip(cb);
 }
 
 static const struct of_device_id cberryfb_of_match[] = {
