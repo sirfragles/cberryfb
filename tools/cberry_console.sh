@@ -66,8 +66,19 @@ do_install() {
     need_root
     ensure_pkg
 
-    echo "==> writing $SVC (autologin as $USER_NAME, on tty2)"
-    cat > "$SVC" <<EOF
+    local switch_vt=1
+    if [[ "${1:-}" == "--no-chvt" ]]; then
+        switch_vt=0
+    fi
+
+    local exec_post=""
+    if [[ $switch_vt -eq 1 ]]; then
+        exec_post="ExecStartPost=/usr/bin/chvt 2"
+    fi
+
+    echo "==> writing $SVC (autologin as $USER_NAME, on tty2; chvt=$switch_vt)"
+    {
+        cat <<EOF
 [Unit]
 Description=Console on C-Berry LCD (/dev/fb1) via fbterm
 After=systemd-user-sessions.service plymouth-quit-wait.service
@@ -82,7 +93,9 @@ PrivateMounts=yes
 BindPaths=/dev/fb1:/dev/fb0
 Environment=TERM=linux
 ExecStart=/usr/bin/fbterm --font-size=${DEFAULT_FONT_SIZE} -- /bin/su - ${USER_NAME}
-ExecStartPost=/usr/bin/chvt 2
+EOF
+        [[ -n "$exec_post" ]] && echo "$exec_post"
+        cat <<EOF
 Type=idle
 Restart=always
 RestartSec=2
@@ -100,6 +113,7 @@ SendSIGHUP=yes
 [Install]
 WantedBy=multi-user.target
 EOF
+    } > "$SVC"
     systemctl daemon-reload
     # Make sure the regular getty doesn't fight us for tty2.
     systemctl disable --now getty@tty2.service 2>/dev/null || true
@@ -119,11 +133,11 @@ do_remove() {
 
 case "${1:-status}" in
     run)     do_run ;;
-    install) do_install ;;
+    install) shift || true; do_install "$@" ;;
     remove)  do_remove ;;
     start)   need_root; systemctl start cberry-console.service ;;
     stop)    need_root; systemctl stop  cberry-console.service ;;
     restart) need_root; systemctl restart cberry-console.service ;;
     status)  systemctl status cberry-console.service --no-pager 2>&1 || true ;;
-    *) echo "usage: $0 {run|install|remove|start|stop|restart|status}" >&2; exit 1 ;;
+    *) echo "usage: $0 {run|install [--no-chvt]|remove|start|stop|restart|status}" >&2; exit 1 ;;
 esac
