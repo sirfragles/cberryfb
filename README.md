@@ -61,7 +61,7 @@ ls /lib/modules/$(uname -r)/build
 ### 2. Pobranie i kompilacja
 
 ```bash
-git clone https://github.com/uvoelkel/cberryfb.git
+git clone https://github.com/sirfragles/cberryfb.git
 cd cberryfb
 make
 ```
@@ -247,7 +247,7 @@ z `raspberrypi-kernel-headers` wystarczy.
 Jeśli budujesz całe jądro od zera, dodaj sterownik do tree:
 
 ```bash
-git clone https://github.com/uvoelkel/cberryfb.git \
+git clone https://github.com/sirfragles/cberryfb.git \
     drivers/video/fbdev/cberryfb
 ```
 

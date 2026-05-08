@@ -2,16 +2,18 @@
 /*
  * Frame buffer driver for the admatec C-Berry 320x240 LCD module.
  *
- * Original work (2014, BCM2835-only, /dev/mem style):
- *     Copyright (C) 2014 Ulrich Völkel
- *     based on the bcm2835 library by Mike McCauley and the
- *     C-Berry example code by admatec GmbH.
- *
  * Modern rewrite (2026):
+ *     Copyright (C) 2026 Mateusz Żerebecki <sirfragles@github>
  *     - registers as an spi_driver bound through device tree
  *     - uses GPIO descriptors (gpiod) instead of mapping /dev/mem
  *     - uses the modern fb deferred-IO sysmem helpers
  *     - portable across Raspberry Pi 1 through Pi 5
+ *
+ * Historical attribution (kept for reference; no code from these is
+ * carried over verbatim into this rewrite):
+ *     - Original 2014 BCM2835-only driver by Ulrich Völkel
+ *     - bcm2835 user-space library by Mike McCauley
+ *     - C-Berry example code by admatec GmbH
  *
  * The on-board glue logic latches each 16-bit SPI word into the parallel
  * RAIO8870 controller using a separate WR strobe. This driver therefore
@@ -694,6 +696,6 @@ static struct spi_driver cberryfb_driver = {
 module_spi_driver(cberryfb_driver);
 
 MODULE_DESCRIPTION("admatec C-Berry LCD framebuffer driver");
-MODULE_AUTHOR("Ulrich Völkel");
+MODULE_AUTHOR("Mateusz Żerebecki");
 MODULE_LICENSE("GPL v2");
 MODULE_ALIAS("spi:cberry");
