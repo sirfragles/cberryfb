@@ -1,86 +1,30 @@
-# cberry_diag.py — narzędzie diagnostyczne C-Berry
+# tools/ — userspace helpers for the C-Berry LCD
 
-Standalone test sprzętu z poziomu Pythona, omijający sterownik jądra.
-Pozwala wykluczyć kolejno: zasilanie HAT-a, dostęp do SPI, odpowiedź
-RAIO8870, działanie podświetlenia i wyświetlanie pikseli.
+All scripts assume the `cberryfb` kernel module is loaded and the panel
+is exposed as `/dev/fb1` plus `/sys/class/backlight/cberryfb/`.
 
-## Przygotowanie Pi
+| Script                | Purpose                                                      |
+|-----------------------|--------------------------------------------------------------|
+| `cberry_backlight.sh` | Set backlight (0–255) via sysfs.                             |
+| `cberry_show.sh`      | Display a single image file (uses fbi).                      |
+| `cberry_mirror.sh`    | Install/remove a systemd service that mirrors HDMI → C-Berry.|
+| `cberry_xmonitor.sh`  | Make the C-Berry the system's primary X display (Xorg fbdev).|
 
-1. Tymczasowo wyłącz nasz overlay, żeby zwolnić `/dev/spidev0.1` i wszystkie GPIO:
-
-   ```bash
-   sudo sed -i 's/^dtoverlay=cberry/#dtoverlay=cberry/' /boot/firmware/config.txt
-   grep -E 'dtparam=spi|dtoverlay' /boot/firmware/config.txt
-   ```
-
-   Upewnij się, że `dtparam=spi=on` jest aktywne.
-
-2. Reboot:
-
-   ```bash
-   sudo reboot
-   ```
-
-3. Po reboocie sprawdź:
-
-   ```bash
-   ls /dev/spidev*           # powinno pokazać 0.0 i 0.1
-   lsmod | grep cberry       # powinno być puste
-   sudo modprobe -r cberryfb # awaryjnie
-   sudo apt install -y python3-spidev python3-rpi.gpio
-   ```
-
-## Uruchomienie
-
-Pełen pipeline:
+## Quick reference
 
 ```bash
-sudo ./tools/cberry_diag.py
-```
+# Backlight (0..255)
+sudo ./cberry_backlight.sh 200
 
-Pojedyncze fazy:
+# Show a picture
+sudo ./cberry_show.sh /path/to/image.jpg
 
-```bash
-sudo ./tools/cberry_diag.py --step env        # vcgencmd, lsmod, model
-sudo ./tools/cberry_diag.py --step spidev     # czy /dev/spidev0.1 jest
-sudo ./tools/cberry_diag.py --step gpios      # poziomy idle wszystkich pinów
-sudo ./tools/cberry_diag.py --step reset      # hard reset + WAIT
-sudo ./tools/cberry_diag.py --step backlight  # rampa P1DCR
-sudo ./tools/cberry_diag.py --step init       # pełny init RAIO
-sudo ./tools/cberry_diag.py --step pattern --pattern bars
-sudo ./tools/cberry_diag.py --step pattern --pattern cycle
-```
+# Mirror HDMI console onto the panel (run once, then reboot)
+sudo ./cberry_mirror.sh install
+sudo systemctl set-default multi-user.target
+sudo reboot
 
-Inny zegar SPI (np. 4 MHz dla starszych shifterów):
-
-```bash
-sudo ./tools/cberry_diag.py --speed 4000000
-```
-
-## Jak czytać wyniki
-
-| Faza        | Co weryfikuje                                              |
-|-------------|------------------------------------------------------------|
-| env         | Pi nie throttluje, sterownik nie wisi                     |
-| spidev      | Magistrala SPI dostępna z user-space                       |
-| gpios       | Idle: OE/CS/WR/RS/RST = HIGH, WAIT z pull-up = HIGH        |
-| reset       | Po impulsie RST WAIT idzie HIGH → RAIO żyje                |
-| backlight   | Wzrokowa zmiana jasności panelu                           |
-| init        | Pełna sekwencja init RAIO bez timeoutu                    |
-| pattern     | Test pikseli (kolory, paski)                              |
-
-### Mapa decyzyjna
-
-- **`reset` FAIL** → RAIO nie odpowiada → zasilanie / taśma / shifter
-- **`backlight` brak reakcji wzrokowej** → komendy nie docierają → SPI / shifter
-- **`backlight` działa, `pattern` czarny** → strobe WR / RS źle → zwolnić zegar, sprawdzić polaryzacje
-- **wszystkie OK** → problem był po stronie sterownika jądra; porównaj `cberryfb.c`
-
-## Powrót do sterownika
-
-Po diagnostyce przywróć overlay:
-
-```bash
-sudo sed -i 's/^#dtoverlay=cberry/dtoverlay=cberry/' /boot/firmware/config.txt
+# Make the panel the only X display (kiosk-style; reboot)
+sudo ./cberry_xmonitor.sh install
 sudo reboot
 ```
