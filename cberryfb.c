@@ -451,9 +451,9 @@ static int cberryfb_request_gpios(struct cberryfb *cb)
 	if (IS_ERR(cb->rs))
 		return dev_err_probe(dev, PTR_ERR(cb->rs), "rs-gpios\n");
 
-	cb->cs    = devm_gpiod_get(dev, "cs",    GPIOD_OUT_LOW);
+	cb->cs    = devm_gpiod_get(dev, "lcd-cs", GPIOD_OUT_LOW);
 	if (IS_ERR(cb->cs))
-		return dev_err_probe(dev, PTR_ERR(cb->cs), "cs-gpios\n");
+		return dev_err_probe(dev, PTR_ERR(cb->cs), "lcd-cs-gpios\n");
 
 	cb->wr    = devm_gpiod_get(dev, "wr",    GPIOD_OUT_LOW);
 	if (IS_ERR(cb->wr))

@@ -59,10 +59,10 @@
 				status = "okay";
 
 				/* All output strobes are active low on the C-Berry HAT. */
-				oe-gpios    = <&gpio 17 1>;
-				rs-gpios    = <&gpio 18 0>;	/* RS: 1=register, 0=data */
-				cs-gpios    = <&gpio  8 1>;	/* RAIO_CS */
-				wr-gpios    = <&gpio 24 1>;	/* WR strobe */
+				oe-gpios     = <&gpio 17 1>;
+				rs-gpios     = <&gpio 18 0>;	/* RS: 1=register, 0=data */
+				lcd-cs-gpios = <&gpio  8 1>;	/* RAIO_CS (NOT the SPI CE) */
+				wr-gpios     = <&gpio 24 1>;	/* WR strobe */
 				reset-gpios = <&gpio 25 1>;	/* hard reset */
 				wait-gpios  = <&gpio 22 0>;	/* input: 1 = ready */
 			};
