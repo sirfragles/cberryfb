@@ -66,6 +66,23 @@
 		};
 	};
 
+	/*
+	 * The vendor reference code enables the internal pull-up on the
+	 * WAIT line; without it the pin floats and the RAIO busy-wait can
+	 * either time out or, worse, return "ready" before the controller
+	 * actually is.
+	 */
+	fragment@5 {
+		target = <&gpio>;
+		__overlay__ {
+			cberry_wait_pull: cberry_wait_pull {
+				brcm,pins = <22>;
+				brcm,function = <0>; /* input */
+				brcm,pull = <2>;     /* pull-up */
+			};
+		};
+	};
+
 	fragment@2 {
 		target = <&spi0>;
 		__overlay__ {
@@ -86,6 +103,9 @@
 				wr-gpios     = <&gpio 24 1>;	/* WR strobe */
 				reset-gpios = <&gpio 25 1>;	/* hard reset */
 				wait-gpios  = <&gpio 22 0>;	/* input: 1 = ready */
+
+				pinctrl-names = "default";
+				pinctrl-0 = <&cberry_wait_pull>;
 			};
 		};
 	};
