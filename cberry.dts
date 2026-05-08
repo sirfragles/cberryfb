@@ -34,6 +34,15 @@
 		target = <&spi0>;
 		__overlay__ {
 			status = "okay";
+			/*
+			 * The Pi base DT pins both SPI0 chip-selects to GPIOs:
+			 *   cs-gpios = <&gpio 8 1>, <&gpio 7 1>;
+			 * That permanently reserves GPIO 8, which is also the
+			 * RAIO chip-select on the C-Berry HAT. Override the list:
+			 * slot 0 -> native HW CS (placeholder 0), slot 1 -> our
+			 * SPI device on CE1 (GPIO 7).
+			 */
+			cs-gpios = <0>, <&gpio 7 1>;
 		};
 	};
 
@@ -42,6 +51,21 @@
 		target = <&spidev1>;
 		__overlay__ {
 			status = "disabled";
+		};
+	};
+
+	/*
+	 * GPIO 8 is the RAIO chip-select on the C-Berry HAT, but the Pi
+	 * base DT also lists it under spi0_cs_pins (as native SPI0 CE0)
+	 * with ALT0 pinmux. That blocks gpiod_get() on it. Reduce the
+	 * SPI0 chip-select pin group to only CE1 (GPIO 7) so GPIO 8 is
+	 * free for the LCD.
+	 */
+	fragment@3 {
+		target = <&spi0_cs_pins>;
+		__overlay__ {
+			brcm,pins = <7>;
+			brcm,function = <1>; /* output */
 		};
 	};
 
