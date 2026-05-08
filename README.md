@@ -269,4 +269,16 @@ Potem `make menuconfig` → *Device Drivers* → *Graphics support*
 
 ## Licencja
 
-GPLv2 (zgodnie z modułem jądra Linux).
+Cały kod tego repozytorium jest objęty licencją **GPL-2.0-only**
+(plik [LICENSE](LICENSE)). To samo licencjonowanie ma kernel Linux
+i jest to jedyny sensowny wybór dla sterownika modułu jądra:
+
+- pliki źródłowe (`cberryfb.c`, `cberry.dts`, `Makefile`, `Kconfig`,
+  `tools/*.sh`) noszą nagłówek `SPDX-License-Identifier: GPL-2.0`,
+- moduł jądra deklaruje `MODULE_LICENSE("GPL v2")`, dzięki czemu ma
+  dostęp do GPL-only symboli kernela.
+
+Materiały referencyjne pod `C-Berry/` (przykłady admatec GmbH) i
+`cberry_diebahn/` (kod Mike McCauley / admatec) zachowują swoje
+oryginalne nagłówki praw autorskich i licencji — znajdziesz je
+w nagłówkach poszczególnych plików.

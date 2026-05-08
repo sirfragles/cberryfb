@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0
 # tools/cberry_xmonitor.sh — turn the C-Berry LCD into the system's
 # primary monitor by running Xorg directly on /dev/fb1.
 #

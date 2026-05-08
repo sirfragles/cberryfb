@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0
 # tools/cberry_console.sh — run a real terminal directly on the
 # C-Berry LCD (/dev/fb1) using fbterm.
 #

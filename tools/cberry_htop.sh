@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0
 # tools/cberry_htop.sh — replace the C-Berry console session with htop
 # (or any other full-screen TUI). Uses a systemd drop-in so the change
 # is reversible without touching the main unit.

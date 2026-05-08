@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0
 # tools/cberry_backlight.sh — get/set C-Berry backlight brightness.
 #
 # Usage:

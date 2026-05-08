@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0
 # tools/cberry_show.sh — display an image / play a video on /dev/fb1.
 # Wraps fbi (images) and ffmpeg (video) so you don't have to remember
 # the framebuffer flags.
