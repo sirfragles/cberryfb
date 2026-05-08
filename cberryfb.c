@@ -414,10 +414,12 @@ static int cberryfb_raio_init(struct cberryfb *cb)
 
 	cberryfb_set_register(cb, RAIO_PCLK, 0x00);
 
-	/* Backlight at full brightness. */
+	/* Configure PWM1 for backlight but leave duty cycle at 0 so the
+	 * panel does not flash on during driver load. Userspace brings
+	 * brightness up via /sys/class/backlight/cberryfb/brightness. */
 	cberryfb_set_register(cb, RAIO_P1CR,  0x88);
-	cberryfb_set_register(cb, RAIO_P1DCR, RAIO_BL_PWM_MAX);
-	cb->brightness = RAIO_BL_PWM_MAX;
+	cberryfb_set_register(cb, RAIO_P1DCR, 0x00);
+	cb->brightness = 0;
 
 	/* Clear the on-controller memory with the background colour. */
 	cberryfb_set_register(cb, RAIO_TBCR, 0x00);
@@ -486,7 +488,7 @@ static int cberryfb_probe(struct spi_device *spi)
 	struct backlight_properties bl_props = {
 		.type		= BACKLIGHT_RAW,
 		.max_brightness	= RAIO_BL_PWM_MAX,
-		.brightness	= RAIO_BL_PWM_MAX,
+		.brightness	= 0,
 	};
 	struct backlight_device *bldev;
 	struct fb_deferred_io *defio;
