@@ -360,15 +360,23 @@ def phase_handshake(panel: Panel) -> None:
     step("Communication handshake (MCLR busy pulse on floating WAIT)")
 
     # Re-program WAIT pin without internal pull. RPi.GPIO doesn't expose
-    # PUD_OFF reliably across versions, so use raspi-gpio if available.
+    # PUD_OFF reliably across versions, so we shell out. Recent
+    # Raspberry Pi OS ships `pinctrl`; older releases had `raspi-gpio`.
     import subprocess, shutil
-    if shutil.which("raspi-gpio"):
+    if shutil.which("pinctrl"):
+        subprocess.run(["pinctrl", "set", str(WAIT_PIN), "ip", "pn"],
+                       check=False)
+        ok("set GPIO22 to input, no pull (pinctrl)")
+        pull_tool = ("pinctrl", "pu")
+    elif shutil.which("raspi-gpio"):
         subprocess.run(["raspi-gpio", "set", str(WAIT_PIN), "ip", "pn"],
                        check=False)
         ok("set GPIO22 to input, no pull (raspi-gpio)")
+        pull_tool = ("raspi-gpio", "pu")
     else:
-        warn("raspi-gpio not found; pull-up still active, "
-             "test result may be a false positive")
+        warn("neither pinctrl nor raspi-gpio found; pull-up still "
+             "active, test result may be a false positive")
+        pull_tool = None
 
     # baseline
     base_high = sum(GPIO.input(WAIT_PIN) for _ in range(20)) / 20.0
@@ -396,8 +404,9 @@ def phase_handshake(panel: Panel) -> None:
              "level shifter / 5V rail / FFC seating / dead chip.")
 
     # restore pull-up for the rest of the script
-    if shutil.which("raspi-gpio"):
-        subprocess.run(["raspi-gpio", "set", str(WAIT_PIN), "ip", "pu"],
+    if pull_tool is not None:
+        tool, pud = pull_tool
+        subprocess.run([tool, "set", str(WAIT_PIN), "ip", pud],
                        check=False)
 
 
