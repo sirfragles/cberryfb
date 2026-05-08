@@ -92,7 +92,7 @@
 			cberry: cberry@1 {
 				compatible = "admatec,cberry";
 				reg = <1>;	/* SPI0 CE1 */
-				spi-max-frequency = <32000000>;
+				spi-max-frequency = <8000000>;
 				/* SPI mode 0: neither spi-cpol nor spi-cpha set */
 				status = "okay";
 
