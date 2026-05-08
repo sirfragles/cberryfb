@@ -27,7 +27,7 @@ import time
 import spidev
 import RPi.GPIO as GPIO  # type: ignore
 
-OE_PIN, RS_PIN, CS_PIN, WR_PIN, RST_PIN, WAIT_PIN = 17, 18, 8, 24, 25, 22
+OE_PIN, RS_PIN, CS_PIN, WR_PIN, RD_PIN, RST_PIN, WAIT_PIN = 17, 18, 8, 24, 23, 25, 22
 W, H = 320, 240
 
 PWRR, MRWC, PCLK, SYSR, HDWR = 0x01, 0x02, 0x04, 0x10, 0x14
@@ -58,7 +58,7 @@ NAMED = {
 def setup() -> spidev.SpiDev:
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
-    for p in (OE_PIN, RS_PIN, CS_PIN, WR_PIN, RST_PIN):
+    for p in (OE_PIN, RS_PIN, CS_PIN, WR_PIN, RD_PIN, RST_PIN):
         GPIO.setup(p, GPIO.OUT, initial=GPIO.HIGH)
     GPIO.setup(WAIT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     spi = spidev.SpiDev()

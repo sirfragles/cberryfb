@@ -49,8 +49,8 @@ except ImportError as e:
 
 
 # --- pinout (BCM) -----------------------------------------------------
-OE_PIN, RS_PIN, CS_PIN, WR_PIN, RST_PIN, WAIT_PIN = 17, 18, 8, 24, 25, 22
-OUT_PINS = (OE_PIN, RS_PIN, CS_PIN, WR_PIN, RST_PIN)
+OE_PIN, RS_PIN, CS_PIN, WR_PIN, RD_PIN, RST_PIN, WAIT_PIN = 17, 18, 8, 24, 23, 25, 22
+OUT_PINS = (OE_PIN, RS_PIN, CS_PIN, WR_PIN, RD_PIN, RST_PIN)
 
 # --- RAIO regs --------------------------------------------------------
 REG_PWRR  = 0x01

@@ -86,6 +86,7 @@ struct cberryfb {
 	struct gpio_desc	*rs;
 	struct gpio_desc	*cs;	/* RAIO chip select (separate from SPI CE) */
 	struct gpio_desc	*wr;
+	struct gpio_desc	*rd;	/* read strobe — kept deasserted */
 	struct gpio_desc	*reset;
 	struct gpio_desc	*wait;	/* input: 1 == ready */
 
@@ -458,6 +459,15 @@ static int cberryfb_request_gpios(struct cberryfb *cb)
 	cb->wr    = devm_gpiod_get(dev, "wr",    GPIOD_OUT_LOW);
 	if (IS_ERR(cb->wr))
 		return dev_err_probe(dev, PTR_ERR(cb->wr), "wr-gpios\n");
+
+	/* RD must be parked deasserted (HIGH on the bus) — without this,
+	 * RAIO can interpret bus traffic as a continuous read cycle and
+	 * silently drop every command we issue. The vendor SDK explicitly
+	 * sets RD=HIGH at boot. We use _optional so older overlays without
+	 * rd-gpios still load. */
+	cb->rd    = devm_gpiod_get_optional(dev, "rd", GPIOD_OUT_LOW);
+	if (IS_ERR(cb->rd))
+		return dev_err_probe(dev, PTR_ERR(cb->rd), "rd-gpios\n");
 
 	cb->reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(cb->reset))

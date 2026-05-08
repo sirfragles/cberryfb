@@ -25,6 +25,7 @@
 #define RS   18
 #define CS    8
 #define WR   24
+#define RD   23
 #define RST  25
 #define WAIT 22
 
@@ -127,6 +128,7 @@ static void init_board(void)
     bcm2835_gpio_fsel(CS,   BCM2835_GPIO_FSEL_OUTP); bcm2835_gpio_write(CS,   HIGH);
     bcm2835_gpio_fsel(RS,   BCM2835_GPIO_FSEL_OUTP); bcm2835_gpio_write(RS,   HIGH);
     bcm2835_gpio_fsel(WR,   BCM2835_GPIO_FSEL_OUTP); bcm2835_gpio_write(WR,   HIGH);
+    bcm2835_gpio_fsel(RD,   BCM2835_GPIO_FSEL_OUTP); bcm2835_gpio_write(RD,   HIGH);
     bcm2835_gpio_fsel(WAIT, BCM2835_GPIO_FSEL_INPT);
     bcm2835_gpio_set_pud(WAIT, BCM2835_GPIO_PUD_UP);
 

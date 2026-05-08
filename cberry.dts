@@ -101,6 +101,7 @@
 				rs-gpios     = <&gpio 18 0>;	/* RS: 1=register, 0=data */
 				lcd-cs-gpios = <&gpio  8 1>;	/* RAIO_CS (NOT the SPI CE) */
 				wr-gpios     = <&gpio 24 1>;	/* WR strobe */
+				rd-gpios     = <&gpio 23 1>;	/* RD strobe (kept deasserted) */
 				reset-gpios = <&gpio 25 1>;	/* hard reset */
 				wait-gpios  = <&gpio 22 0>;	/* input: 1 = ready */
 

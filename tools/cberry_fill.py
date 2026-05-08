@@ -31,7 +31,7 @@ except ImportError as e:
     sys.exit(f"missing dependency: {e}; "
              "sudo apt install python3-spidev python3-rpi.gpio")
 
-OE_PIN, RS_PIN, CS_PIN, WR_PIN, RST_PIN, WAIT_PIN = 17, 18, 8, 24, 25, 22
+OE_PIN, RS_PIN, CS_PIN, WR_PIN, RD_PIN, RST_PIN, WAIT_PIN = 17, 18, 8, 24, 23, 25, 22
 W, H = 320, 240
 
 # RAIO regs
@@ -55,7 +55,7 @@ class Panel:
     def __init__(self, hz: int = 16_000_000):
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
-        for p in (OE_PIN, RS_PIN, CS_PIN, WR_PIN, RST_PIN):
+        for p in (OE_PIN, RS_PIN, CS_PIN, WR_PIN, RD_PIN, RST_PIN):
             GPIO.setup(p, GPIO.OUT, initial=GPIO.HIGH)
         GPIO.setup(WAIT_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
