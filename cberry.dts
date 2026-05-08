@@ -55,17 +55,14 @@
 	};
 
 	/*
-	 * GPIO 8 is the RAIO chip-select on the C-Berry HAT, but the Pi
-	 * base DT also lists it under spi0_cs_pins (as native SPI0 CE0)
-	 * with ALT0 pinmux. That blocks gpiod_get() on it. Reduce the
-	 * SPI0 chip-select pin group to only CE1 (GPIO 7) so GPIO 8 is
-	 * free for the LCD.
+	 * Disable spidev0.0 too: with cs-gpios slot 0 set to <0> the
+	 * SPI core would still spawn spidev0 on native HW CE0 (GPIO 8),
+	 * stealing the line we need for RAIO_CS.
 	 */
-	fragment@3 {
-		target = <&spi0_cs_pins>;
+	fragment@4 {
+		target = <&spidev0>;
 		__overlay__ {
-			brcm,pins = <7>;
-			brcm,function = <1>; /* output */
+			status = "disabled";
 		};
 	};
 
