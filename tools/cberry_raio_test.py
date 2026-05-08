@@ -410,15 +410,26 @@ def test_strobe_count(bus: Bus) -> Result:
         time.sleep(0.05)
         prev = 1
         edges = 0
-        # fire 8 MCLRs, each followed by ~30 ms observation
+        # Each MCLR busy lasts ~110 ms — fire, count the falling edge,
+        # then wait for WAIT to return HIGH before issuing the next one.
         for _ in range(8):
             bus.set_reg(REG_MCLR, 0x80)
-            t_end = time.monotonic() + 0.030
+            # observe for falling edge for up to 50 ms
+            t_end = time.monotonic() + 0.050
+            saw_low = False
             while time.monotonic() < t_end:
                 cur = GPIO.input(WAIT_PIN)
                 if prev == 1 and cur == 0:
                     edges += 1
+                    saw_low = True
                 prev = cur
+                if saw_low:
+                    break
+            # wait for WAIT to return HIGH (chip ready) before next MCLR
+            t_end = time.monotonic() + 0.300
+            while time.monotonic() < t_end and GPIO.input(WAIT_PIN) == 0:
+                pass
+            prev = 1
         pulses["count"] = edges
 
     with_floating_wait(run)
