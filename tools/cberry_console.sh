@@ -69,7 +69,11 @@ ConditionPathExists=/dev/fb1
 Conflicts=getty@tty2.service
 
 [Service]
-Environment=FRAMEBUFFER=/dev/fb1
+# fbterm 1.7 hard-codes /dev/fb0 (the FRAMEBUFFER env var is ignored
+# in this build), so bind-mount /dev/fb1 over /dev/fb0 *inside this
+# unit's mount namespace*. The host's /dev/fb0 is not affected.
+PrivateMounts=yes
+BindPaths=/dev/fb1:/dev/fb0
 Environment=TERM=linux
 ExecStart=/usr/bin/fbterm --font-size=${DEFAULT_FONT_SIZE} -- /bin/su - ${USER_NAME}
 Type=idle
