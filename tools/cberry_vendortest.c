@@ -1,8 +1,6 @@
 /*
- * cberry_vendortest.c — verbatim copy of vendor tft_test.c main() with
- * the BMP source replaced by a solid-colour fill. Links against vendor
- * tft.c + RAIO8870.c, so the only difference vs the working vendor demo
- * is the source of pixel bytes.
+ * cberry_vendortest.c — vendor RAIO_init + solid-colour fill via
+ * vendor RAIO_Write_Picture. Confirmed working on this hardware.
  *
  * Build: tools/run_vendortest.sh
  * Run:   sudo ./cberry_vendortest [red|green|blue|white|black]
@@ -36,24 +34,6 @@ int main(int argc, char **argv)
     TFT_hard_reset();
     RAIO_init();
 
-    /* Vendor preamble verbatim. */
-    Draw_Square(0, 0, 319, 239);
-    Text_Foreground_Color(COLOR_BLACK);
-    RAIO_StartDrawing(SQUARE_FILL);
-
-    Text_Foreground_Color(COLOR_BLUE);
-    Draw_Square(210, 150, 260, 200);
-
-    Draw_Line(10, 230, 310, 10);
-    Text_Foreground_Color(COLOR_GREEN);
-    RAIO_StartDrawing(LINE);
-
-    Draw_Circle(90, 65, 25);
-    Text_Foreground_Color(COLOR_RED);
-    RAIO_StartDrawing(CIRCLE_FILL);
-
-    delay(2000);
-
     for (j = 0; j < PICTURE_PIXELS; j++)
         picture[0][j] = pix565;
 
@@ -61,7 +41,7 @@ int main(int argc, char **argv)
             pix565, col, PICTURE_PIXELS);
     RAIO_Write_Picture(&picture[0][0], PICTURE_PIXELS);
 
-    fprintf(stderr, "==> done; panel should now be solid %s\n", col);
+    fprintf(stderr, "==> done; panel should be solid %s\n", col);
     delay(5000);
 
     bcm2835_close();
