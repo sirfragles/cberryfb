@@ -40,10 +40,20 @@ ensure_pkg() {
 do_run() {
     need_root
     ensure_pkg
-    # fbterm honours FRAMEBUFFER for the target device.
-    FRAMEBUFFER=/dev/fb1 exec fbterm \
-        --font-size="$DEFAULT_FONT_SIZE" \
-        -- bash -lc "exec login -f $USER_NAME"
+    # fbterm refuses to start unless stdin is a real TTY (it ioctls
+    # KDSETMODE etc.). When run from SSH/pty that fails with
+    # "stdin isn't a interactive tty". Spawn it on a free VT instead;
+    # openvt allocates one, runs us there, and cleans up on exit.
+    if [[ -t 0 && -c /dev/tty ]]; then
+        FRAMEBUFFER=/dev/fb1 exec fbterm \
+            --font-size="$DEFAULT_FONT_SIZE" \
+            -- bash -lc "exec login -f $USER_NAME"
+    else
+        echo "==> not on a real tty (probably SSH); launching on a free VT"
+        exec openvt -s -w -- env FRAMEBUFFER=/dev/fb1 \
+            fbterm --font-size="$DEFAULT_FONT_SIZE" \
+            -- bash -lc "exec login -f $USER_NAME"
+    fi
 }
 
 do_install() {
