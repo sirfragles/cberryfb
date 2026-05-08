@@ -213,19 +213,25 @@ def main() -> int:
                     help="colour name (white/red/...) or 0xRRGGBB-565 word")
     ap.add_argument("--strict", action="store_true",
                     help="strict per-word WR strobe (slow but vendor-exact)")
+    ap.add_argument("--no-reset", action="store_true",
+                    help="skip hard reset (preserve current chip state)")
+    ap.add_argument("--no-init", action="store_true",
+                    help="skip RAIO_init (assume already configured)")
     ap.add_argument("--speed", type=int, default=16_000_000)
     args = ap.parse_args()
 
     color = parse_color(args.color)
     print(f"colour 0x{color:04X}; SPI {args.speed/1e6:.1f} MHz; "
-          f"strict={args.strict}")
+          f"strict={args.strict} no_reset={args.no_reset} no_init={args.no_init}")
 
     p = Panel(hz=args.speed)
     try:
-        p.hard_reset()
-        p.init()
-        print("init done; panel should be white now (vendor default bg)")
-        time.sleep(1.0)
+        if not args.no_reset:
+            p.hard_reset()
+        if not args.no_init:
+            p.init()
+            print("init done; panel should be white now (vendor default bg)")
+            time.sleep(1.0)
 
         t0 = time.monotonic()
         if args.strict:
