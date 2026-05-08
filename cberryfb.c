@@ -94,7 +94,25 @@ struct cberryfb {
 
 	u32			palette[16];
 	u8			brightness;
+	bool			backlight_armed;
 };
+
+/* ------------------------------------------------------------------ */
+/* Module parameters                                                  */
+/* ------------------------------------------------------------------ */
+
+static unsigned int fps = CBERRY_DEFAULT_FPS;
+module_param(fps, uint, 0444);
+MODULE_PARM_DESC(fps, "Maximum deferred-IO frame rate (1..60, default 25)");
+
+static unsigned int brightness = RAIO_BL_PWM_MAX;
+module_param(brightness, uint, 0644);
+MODULE_PARM_DESC(brightness,
+	"Backlight value applied after the first frame is rendered (0..255, default 255). Set to 0 to keep the panel dark until userspace writes /sys/class/backlight/cberryfb/brightness.");
+
+/* Forward declaration: backlight helper is defined below but needs to be
+ * callable from the deferred-IO path. */
+static int cberryfb_set_backlight(struct cberryfb *cb, u8 value);
 
 /* ------------------------------------------------------------------ */
 /* Low-level bus helpers                                              */
@@ -192,6 +210,7 @@ static void cberryfb_update_display(struct fb_info *info)
 	const u16 *src = (const u16 *)info->screen_buffer;
 	size_t pixels = (size_t)DISPLAY_WIDTH * DISPLAY_HEIGHT;
 	size_t i;
+	bool arm_backlight = false;
 
 	mutex_lock(&cb->io_lock);
 
@@ -213,8 +232,23 @@ static void cberryfb_update_display(struct fb_info *info)
 	gpiod_set_value_cansleep(cb->cs, 0);
 	gpiod_set_value_cansleep(cb->oe, 0);
 
+	/* First frame finished latching — defer the backlight ramp until
+	 * the bus is released (cberryfb_set_backlight takes io_lock). */
+	if (!cb->backlight_armed) {
+		cb->backlight_armed = true;
+		arm_backlight = brightness > 0;
+	}
+
 out:
 	mutex_unlock(&cb->io_lock);
+
+	if (arm_backlight) {
+		u8 v = clamp_t(unsigned int, brightness, 0, RAIO_BL_PWM_MAX);
+
+		cberryfb_set_backlight(cb, v);
+		if (info->bl_dev)
+			info->bl_dev->props.brightness = v;
+	}
 }
 
 /* ------------------------------------------------------------------ */
@@ -437,10 +471,6 @@ out:
 /* ------------------------------------------------------------------ */
 /* Probe / remove                                                     */
 /* ------------------------------------------------------------------ */
-
-static unsigned int fps = CBERRY_DEFAULT_FPS;
-module_param(fps, uint, 0444);
-MODULE_PARM_DESC(fps, "Maximum frame rate of deferred IO updates");
 
 static int cberryfb_request_gpios(struct cberryfb *cb)
 {
