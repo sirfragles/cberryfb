@@ -47,12 +47,12 @@ do_run() {
     if [[ -t 0 && -c /dev/tty ]]; then
         FRAMEBUFFER=/dev/fb1 exec fbterm \
             --font-size="$DEFAULT_FONT_SIZE" \
-            -- bash -lc "exec login -f $USER_NAME"
+            -- su - "$USER_NAME"
     else
         echo "==> not on a real tty (probably SSH); launching on a free VT"
         exec openvt -s -w -- env FRAMEBUFFER=/dev/fb1 \
             fbterm --font-size="$DEFAULT_FONT_SIZE" \
-            -- bash -lc "exec login -f $USER_NAME"
+            -- su - "$USER_NAME"
     fi
 }
 
@@ -71,7 +71,7 @@ Conflicts=getty@tty2.service
 [Service]
 Environment=FRAMEBUFFER=/dev/fb1
 Environment=TERM=linux
-ExecStart=/usr/bin/fbterm --font-size=${DEFAULT_FONT_SIZE} -- /bin/login -f ${USER_NAME}
+ExecStart=/usr/bin/fbterm --font-size=${DEFAULT_FONT_SIZE} -- /bin/su - ${USER_NAME}
 Type=idle
 Restart=always
 RestartSec=2
