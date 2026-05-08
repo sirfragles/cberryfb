@@ -318,10 +318,20 @@ static int cberryfb_set_backlight(struct cberryfb *cb, u8 value)
 	int ret;
 
 	mutex_lock(&cb->io_lock);
-	/* Enable PWM1 with the /256 divider, then write the duty. */
-	ret = cberryfb_set_register(cb, RAIO_P1CR, 0x88);
-	if (!ret)
+	if (value == 0) {
+		/* Disable PWM1 entirely so the LED driver gets a clean LOW
+		 * (no residual duty, no carrier). Avoids any sub-percent
+		 * glow that the LED can pick up from a 0%-duty PWM. */
+		ret = cberryfb_set_register(cb, RAIO_P1DCR, 0x00);
+		if (!ret)
+			ret = cberryfb_set_register(cb, RAIO_P1CR, 0x00);
+	} else {
+		/* Write the duty before enabling, so the chip does not
+		 * latch a stale P1DCR for one PWM cycle when PWM1 turns on. */
 		ret = cberryfb_set_register(cb, RAIO_P1DCR, value);
+		if (!ret)
+			ret = cberryfb_set_register(cb, RAIO_P1CR, 0x88);
+	}
 	if (!ret)
 		cb->brightness = value;
 	mutex_unlock(&cb->io_lock);
@@ -414,11 +424,13 @@ static int cberryfb_raio_init(struct cberryfb *cb)
 
 	cberryfb_set_register(cb, RAIO_PCLK, 0x00);
 
-	/* Configure PWM1 for backlight but leave duty cycle at 0 so the
-	 * panel does not flash on during driver load. Userspace brings
-	 * brightness up via /sys/class/backlight/cberryfb/brightness. */
-	cberryfb_set_register(cb, RAIO_P1CR,  0x88);
-	cberryfb_set_register(cb, RAIO_P1DCR, 0x00);
+	/* Do NOT touch the backlight PWM here. After hard_reset the PWM1
+	 * block is disabled, so the backlight LED driver sees no clocked
+	 * signal and stays off. Enabling PWM1 (P1CR) before writing P1DCR
+	 * was lighting the panel briefly during probe because the chip
+	 * latches the previous duty register for one cycle. The backlight
+	 * comes on later, via cberryfb_set_backlight(), once userspace
+	 * writes a non-zero value to /sys/class/backlight/cberryfb/brightness. */
 	cb->brightness = 0;
 
 	/* Clear the on-controller memory with the background colour. */
