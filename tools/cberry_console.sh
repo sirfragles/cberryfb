@@ -60,30 +60,38 @@ do_install() {
     need_root
     ensure_pkg
 
-    echo "==> writing $SVC (autologin as $USER_NAME)"
+    echo "==> writing $SVC (autologin as $USER_NAME, on tty2)"
     cat > "$SVC" <<EOF
 [Unit]
 Description=Console on C-Berry LCD (/dev/fb1) via fbterm
-After=multi-user.target
+After=systemd-user-sessions.service plymouth-quit-wait.service
 ConditionPathExists=/dev/fb1
+Conflicts=getty@tty2.service
 
 [Service]
-Type=simple
 Environment=FRAMEBUFFER=/dev/fb1
 Environment=TERM=linux
 ExecStart=/usr/bin/fbterm --font-size=${DEFAULT_FONT_SIZE} -- /bin/login -f ${USER_NAME}
+Type=idle
 Restart=always
 RestartSec=2
-StandardInput=tty
-StandardOutput=tty
-TTYPath=/dev/tty7
+UtmpIdentifier=tty2
+TTYPath=/dev/tty2
 TTYReset=yes
 TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+IgnoreSIGPIPE=no
+SendSIGHUP=yes
 
 [Install]
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
+    # Make sure the regular getty doesn't fight us for tty2.
+    systemctl disable --now getty@tty2.service 2>/dev/null || true
     systemctl enable --now cberry-console.service
     echo "==> done. systemctl status cberry-console"
 }
@@ -93,6 +101,8 @@ do_remove() {
     systemctl disable --now cberry-console.service 2>/dev/null || true
     rm -f "$SVC"
     systemctl daemon-reload
+    # Bring the regular tty2 getty back if it was disabled.
+    systemctl enable --now getty@tty2.service 2>/dev/null || true
     echo "==> removed"
 }
 
@@ -100,6 +110,9 @@ case "${1:-status}" in
     run)     do_run ;;
     install) do_install ;;
     remove)  do_remove ;;
+    start)   need_root; systemctl start cberry-console.service ;;
+    stop)    need_root; systemctl stop  cberry-console.service ;;
+    restart) need_root; systemctl restart cberry-console.service ;;
     status)  systemctl status cberry-console.service --no-pager 2>&1 || true ;;
-    *) echo "usage: $0 {run|install|remove|status}" >&2; exit 1 ;;
+    *) echo "usage: $0 {run|install|remove|start|stop|restart|status}" >&2; exit 1 ;;
 esac
