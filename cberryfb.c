@@ -77,6 +77,18 @@
 
 #define CBERRY_DEFAULT_FPS	25
 
+static unsigned int fps = CBERRY_DEFAULT_FPS;
+module_param(fps, uint, 0444);
+MODULE_PARM_DESC(fps, "Maximum frame rate of deferred IO updates");
+
+static unsigned int brightness = 180;
+module_param(brightness, uint, 0644);
+MODULE_PARM_DESC(brightness,
+	"Backlight value (0-255) applied automatically when the first\n"
+	"\t\tframebuffer content is drawn. After that, control is handed\n"
+	"\t\toff to userspace via /sys/class/backlight/cberryfb/brightness.\n"
+	"\t\tSet to 0 to keep the panel dark until userspace turns it on.");
+
 struct cberryfb {
 	struct spi_device	*spi;
 	struct fb_info		*info;
@@ -94,6 +106,7 @@ struct cberryfb {
 
 	u32			palette[16];
 	u8			brightness;
+	bool			auto_lit_done;	/* first frame already lit the panel */
 };
 
 /* ------------------------------------------------------------------ */
@@ -215,6 +228,20 @@ static void cberryfb_update_display(struct fb_info *info)
 
 out:
 	mutex_unlock(&cb->io_lock);
+
+	/* First time userspace draws something into the framebuffer, light
+	 * the panel up to the configured default. After that, the backlight
+	 * is owned by sysfs (/sys/class/backlight/cberryfb/brightness) and
+	 * we never touch it from the data path again. */
+	if (!cb->auto_lit_done) {
+		u8 want = min_t(unsigned int, brightness, RAIO_BL_PWM_MAX);
+
+		cb->auto_lit_done = true;
+		if (want && info->bl_dev) {
+			info->bl_dev->props.brightness = want;
+			backlight_update_status(info->bl_dev);
+		}
+	}
 }
 
 /* ------------------------------------------------------------------ */
@@ -451,10 +478,6 @@ out:
 /* ------------------------------------------------------------------ */
 /* Probe / remove                                                     */
 /* ------------------------------------------------------------------ */
-
-static unsigned int fps = CBERRY_DEFAULT_FPS;
-module_param(fps, uint, 0444);
-MODULE_PARM_DESC(fps, "Maximum frame rate of deferred IO updates");
 
 static int cberryfb_request_gpios(struct cberryfb *cb)
 {
