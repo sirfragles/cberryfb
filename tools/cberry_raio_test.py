@@ -408,38 +408,37 @@ def test_strobe_count(bus: Bus) -> Result:
 
     def run():
         time.sleep(0.05)
-        prev = 1
-        edges = 0
-        # Each MCLR busy lasts ~110 ms — fire, count the falling edge,
-        # then wait for WAIT to return HIGH before issuing the next one.
+        completions = 0
+        # Each MCLR pulls WAIT low almost immediately (during the SPI
+        # write itself), so the falling edge is hard to catch reliably.
+        # Instead we wait for the *rising* edge (busy → ready), which
+        # always arrives ~110 ms after issuing MCLR. One rising edge
+        # per MCLR proves the command was accepted and processed.
         for _ in range(8):
             bus.set_reg(REG_MCLR, 0x80)
-            # observe for falling edge for up to 50 ms
-            t_end = time.monotonic() + 0.050
-            saw_low = False
-            while time.monotonic() < t_end:
-                cur = GPIO.input(WAIT_PIN)
-                if prev == 1 and cur == 0:
-                    edges += 1
-                    saw_low = True
-                prev = cur
-                if saw_low:
-                    break
-            # wait for WAIT to return HIGH (chip ready) before next MCLR
+            # Step 1: confirm WAIT actually went LOW (chip is busy).
+            t_end = time.monotonic() + 0.020
+            while time.monotonic() < t_end and GPIO.input(WAIT_PIN) == 1:
+                pass
+            if GPIO.input(WAIT_PIN) == 1:
+                continue   # never went low → command lost
+            # Step 2: wait for rising edge (busy released).
             t_end = time.monotonic() + 0.300
             while time.monotonic() < t_end and GPIO.input(WAIT_PIN) == 0:
                 pass
-            prev = 1
-        pulses["count"] = edges
+            if GPIO.input(WAIT_PIN) == 1:
+                completions += 1
+        pulses["count"] = completions
 
     with_floating_wait(run)
 
-    if pulses["count"] >= 6:
+    if pulses["count"] >= 7:
         return Result("strobe_count", True,
-                      f"{pulses['count']} distinct WAIT-low edges across 8 MCLRs")
+                      f"{pulses['count']}/8 MCLR cycles fully completed "
+                      "(busy → ready)")
     return Result("strobe_count", False,
-                  f"only {pulses['count']}/8 edges seen — "
-                  "commands may be merged or partially lost")
+                  f"only {pulses['count']}/8 MCLR cycles completed — "
+                  "commands lost or chip flaky")
 
 
 def test_spi_speed_sweep(speeds) -> Result:
