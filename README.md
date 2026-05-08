@@ -19,13 +19,44 @@ Wszystkie polecenia wykonujemy bezpośrednio na Pi.
 
 ```bash
 sudo apt update
-sudo apt install -y raspberrypi-kernel-headers build-essential \
-                    device-tree-compiler git
+sudo apt install -y build-essential device-tree-compiler git bc
 ```
 
-> Pakiet `raspberrypi-kernel-headers` instaluje nagłówki jądra
-> dopasowane do aktualnie uruchomionego `uname -r` w
-> `/lib/modules/$(uname -r)/build`.
+Następnie nagłówki jądra. Na **Raspberry Pi OS Bookworm i nowszych**
+nie istnieje już pakiet `raspberrypi-kernel-headers` — zamiast tego są
+metapakiety `linux-headers-rpi-*` zależne od wariantu jądra:
+
+| `uname -r` (przykład)       | Pakiet                  |
+|-----------------------------|-------------------------|
+| `*-v6+`   (Pi 1 / Zero)     | `linux-headers-rpi-v6`  |
+| `*-v7+`   (Pi 2 / 3 / Z2W 32-bit) | `linux-headers-rpi-v7`  |
+| `*-v7l+`  (Pi 4 32-bit)     | `linux-headers-rpi-v7l` |
+| `*-v8+`   (Pi 3/4/Z2W 64-bit) | `linux-headers-rpi-v8`  |
+| `*-2712`  (Pi 5)            | `linux-headers-rpi-2712`|
+
+Auto-wybór odpowiedniego pakietu:
+
+```bash
+KREL=$(uname -r)
+case "$KREL" in
+  *-2712)  PKG=linux-headers-rpi-2712 ;;
+  *-v8+)   PKG=linux-headers-rpi-v8   ;;
+  *-v7l+)  PKG=linux-headers-rpi-v7l  ;;
+  *-v7+)   PKG=linux-headers-rpi-v7   ;;
+  *-v6+)   PKG=linux-headers-rpi-v6   ;;
+  *)       PKG=linux-headers-$KREL    ;;  # fallback (np. mainline)
+esac
+sudo apt install -y "$PKG"
+```
+
+> Na starszych systemach (Bullseye i wcześniej) nadal działa
+> `sudo apt install raspberrypi-kernel-headers`.
+
+Sprawdź, że nagłówki są na miejscu:
+
+```bash
+ls /lib/modules/$(uname -r)/build
+```
 
 ### 2. Pobranie i kompilacja
 
