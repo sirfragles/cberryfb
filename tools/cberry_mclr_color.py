@@ -37,7 +37,7 @@ HSAW0, HSAW1, HEAW0, HEAW1 = 0x30, 0x31, 0x34, 0x35
 VSAW0, VSAW1, VEAW0, VEAW1 = 0x32, 0x33, 0x36, 0x37
 TBCR, MCLR_REG = 0x43, 0x8E
 PLLC1, PLLC2, P1CR, P1DCR = 0x88, 0x89, 0x8A, 0x8B
-IODR = 0xC7
+IODR = 0x13
 DPCR = 0x20
 
 # Background colour registers for 65k mode
@@ -117,54 +117,63 @@ def main():
     spi = setup()
     try:
         hard_reset()
-        print("== init ==")
+        print("== init (vendor 1:1) ==")
 
-        set_reg(spi, PLLC1, 0x07); time.sleep(0.001)
-        set_reg(spi, PLLC2, 0x03); time.sleep(0.001)
+        # PLL
+        set_reg(spi, PLLC1, 0x07); time.sleep(200e-6)
+        set_reg(spi, PLLC2, 0x03); time.sleep(200e-6)
+
+        # software reset of RAIO
         set_reg(spi, PWRR, 0x01)
-        set_reg(spi, PWRR, 0x00); time.sleep(0.1)
+        set_reg(spi, PWRR, 0x00)
+        time.sleep(0.1)
 
+        # color mode 65k, single layer
         set_reg(spi, SYSR, 0x0A)
         set_reg(spi, DPCR, 0x00)
 
+        # horizontal
         set_reg(spi, HDWR,   (W // 8) - 1)
         set_reg(spi, HNDFTR, 0x02)
         set_reg(spi, HNDR,   0x03)
         set_reg(spi, HSTR,   0x04)
         set_reg(spi, HPWR,   0x03)
 
+        # vertical
         set_reg(spi, VDHR0, (H - 1) & 0xFF)
         set_reg(spi, VDHR1, (H - 1) >> 8)
         set_reg(spi, VNDR0, 0x10)
         set_reg(spi, VNDR1, 0x00)
         set_reg(spi, VPWR,  0x00)
 
+        # active window = whole panel
         set_reg(spi, HSAW0, 0); set_reg(spi, HSAW1, 0)
         set_reg(spi, HEAW0, (W - 1) & 0xFF); set_reg(spi, HEAW1, (W - 1) >> 8)
         set_reg(spi, VSAW0, 0); set_reg(spi, VSAW1, 0)
         set_reg(spi, VEAW0, (H - 1) & 0xFF); set_reg(spi, VEAW1, (H - 1) >> 8)
 
+        # PCLK rising edge
         set_reg(spi, PCLK, 0x00)
 
-        # backlight ON 100%
+        # backlight 50% (vendor default)
         set_reg(spi, P1CR,  0x88)
-        set_reg(spi, P1DCR, 0xFF)
+        set_reg(spi, P1DCR, 50)
 
-        print("== set bg colour and MCLR ==")
-        # 65k mode: 5R | 6G | 5B written into BGCR0/1/2
+        # set bg colour AND text bg colour (some firmware uses TBCR for clear)
         set_reg(spi, BGCR0_R, r >> 3)        # 5 bits R
         set_reg(spi, BGCR1_G, g >> 2)        # 6 bits G
         set_reg(spi, BGCR2_B, b >> 3)        # 5 bits B
-        set_reg(spi, TBCR, 0x00)             # text bg index (unused in 65k)
+        set_reg(spi, TBCR, 0xFF)             # text bg = white (vendor sets this)
 
-        set_reg(spi, MCLR_REG, 0x80)         # full memory clear with BGCR
+        # MCLR with active window (vendor uses 0x81 here)
+        set_reg(spi, MCLR_REG, 0x81)
         wait_busy(2.0)
 
-        set_reg(spi, IODR, 0x07)
+        set_reg(spi, IODR, 0x07)             # NOW correctly hits register 0x13
         set_reg(spi, PWRR, 0x80)             # display ON
 
         print("done — screen should be solid", name)
-        time.sleep(2)
+        time.sleep(3)
     finally:
         spi.close()
         GPIO.cleanup()

@@ -89,7 +89,7 @@ REG_PLLC2 = 0x89
 REG_P1CR  = 0x8A
 REG_P1DCR = 0x8B
 REG_MCLR  = 0x8E
-REG_IODR  = 0xC7
+REG_IODR  = 0x13
 
 # ---------------------------------------------------------------- helpers
 
