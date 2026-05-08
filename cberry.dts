@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Device tree overlay for the admatec C-Berry 320x240 LCD module.
+ *
+ * Build:
+ *   dtc -@ -I dts -O dtb -o cberry.dtbo cberry.dts
+ *
+ * Install:
+ *   sudo cp cberry.dtbo /boot/firmware/overlays/
+ *   echo "dtoverlay=cberry" | sudo tee -a /boot/firmware/config.txt
+ *
+ * Wiring (BCM numbering, matches the original C-Berry HAT):
+ *   GPIO 7  - SPI0 CE1 (data strobe to the on-board shift register)
+ *   GPIO 8  - RAIO chip select
+ *   GPIO 9  - SPI0 MISO
+ *   GPIO 10 - SPI0 MOSI
+ *   GPIO 11 - SPI0 SCLK
+ *   GPIO 17 - OE  (output enable, level shifter)
+ *   GPIO 18 - RS  (register / data select)
+ *   GPIO 22 - WAIT (busy in)
+ *   GPIO 23 - RD  (read strobe)
+ *   GPIO 24 - WR  (write strobe)
+ *   GPIO 25 - RST (hard reset)
+ *   GPIO 27 - INT (interrupt in, currently unused)
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&spi0>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Disable the default spidev1.0 so we can claim CE1. */
+	fragment@1 {
+		target = <&spidev1>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@2 {
+		target = <&spi0>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			cberry: cberry@1 {
+				compatible = "admatec,cberry";
+				reg = <1>;	/* SPI0 CE1 */
+				spi-max-frequency = <32000000>;
+				/* SPI mode 0: neither spi-cpol nor spi-cpha set */
+				status = "okay";
+
+				/* All output strobes are active low on the C-Berry HAT. */
+				oe-gpios    = <&gpio 17 1>;
+				rs-gpios    = <&gpio 18 0>;	/* RS: 1=register, 0=data */
+				cs-gpios    = <&gpio  8 1>;	/* RAIO_CS */
+				wr-gpios    = <&gpio 24 1>;	/* WR strobe */
+				reset-gpios = <&gpio 25 1>;	/* hard reset */
+				wait-gpios  = <&gpio 22 0>;	/* input: 1 = ready */
+			};
+		};
+	};
+};

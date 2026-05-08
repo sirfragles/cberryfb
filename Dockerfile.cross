@@ -1,0 +1,70 @@
+# syntax=docker/dockerfile:1.6
+# Cross-compile cberryfb.ko for Raspberry Pi (32-bit ARM) on macOS via a
+# Linux container. Multi-stage build; the final stage is `scratch` and
+# contains only the resulting .ko file so it can be extracted with
+# `docker buildx build --output type=local,dest=./out`.
+#
+# Build args:
+#   KERNEL_BRANCH  - raspberrypi/linux branch (default rpi-6.6.y)
+#   DEFCONFIG      - kernel defconfig (default bcm2709_defconfig for Pi 2/3/Zero 2 W 32-bit)
+#   ARCH           - arm | arm64 (default arm)
+#   CROSS_COMPILE  - cross prefix (default arm-linux-gnueabihf-)
+
+ARG KERNEL_BRANCH=rpi-6.6.y
+ARG DEFCONFIG=bcm2709_defconfig
+ARG ARCH=arm
+ARG CROSS_COMPILE=arm-linux-gnueabihf-
+
+FROM debian:bookworm-slim AS builder
+ARG KERNEL_BRANCH
+ARG DEFCONFIG
+ARG ARCH
+ARG CROSS_COMPILE
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential bc bison flex libssl-dev libncurses-dev \
+        git ca-certificates make rsync kmod cpio python3 \
+        gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu \
+        device-tree-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Shallow-clone only the requested kernel branch.
+RUN git clone --depth=1 --branch ${KERNEL_BRANCH} \
+        https://github.com/raspberrypi/linux.git linux
+
+# Drop our driver into the kernel tree.
+COPY cberryfb.c   linux/drivers/video/fbdev/cberryfb/cberryfb.c
+COPY Kconfig      linux/drivers/video/fbdev/cberryfb/Kconfig
+COPY Makefile     linux/drivers/video/fbdev/cberryfb/Makefile
+COPY cberry.dts   linux/drivers/video/fbdev/cberryfb/cberry.dts
+
+# Wire it into the parent Kconfig / Makefile.
+RUN echo 'source "drivers/video/fbdev/cberryfb/Kconfig"' \
+        >> linux/drivers/video/fbdev/Kconfig \
+    && echo 'obj-$(CONFIG_FB_CBERRY) += cberryfb/' \
+        >> linux/drivers/video/fbdev/Makefile
+
+WORKDIR /build/linux
+
+# Configure, enable the module, prepare the tree, build only our driver.
+# Configure, enable the module, build the kernel + all modules in tree.
+# A full `make modules` is needed because out-of-tree (M=) builds require
+# the kernel's Module.symvers, which is only produced as a side effect of
+# building the in-tree modules.
+RUN make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} ${DEFCONFIG} \
+    && ./scripts/config --module CONFIG_FB_CBERRY \
+    && make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} olddefconfig \
+    && make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} -j"$(nproc)" modules
+
+# Compile the device-tree overlay too.
+RUN dtc -@ -I dts -O dtb \
+        -o drivers/video/fbdev/cberryfb/cberry.dtbo \
+           drivers/video/fbdev/cberryfb/cberry.dts
+
+# ---------- export stage ----------
+FROM scratch AS export
+COPY --from=builder /build/linux/drivers/video/fbdev/cberryfb/cberryfb.ko /
+COPY --from=builder /build/linux/drivers/video/fbdev/cberryfb/cberry.dtbo /

@@ -1,12 +1,18 @@
+# SPDX-License-Identifier: GPL-2.0
 config FB_CBERRY
 	tristate "C-Berry LCD frame buffer support"
-	depends on FB
-	select FB_SYS_FILLRECT
-	select FB_SYS_COPYAREA
-	select FB_SYS_IMAGEBLIT
-	select FB_SYS_FOPS
-	select FB_DEFERRED_IO
+	depends on FB && SPI && OF
+	select FB_SYSMEM_HELPERS_DEFERRED
 	select FB_BACKLIGHT
-	---help---
-	  This framebuffer driver supports the admatec C-Berry LCD module.
+	select BACKLIGHT_CLASS_DEVICE
+	help
+	  Frame buffer driver for the admatec C-Berry 320x240 LCD module
+	  attached to the Raspberry Pi GPIO header.
 
+	  The driver talks to the on-board RAIO8870 LCD controller through
+	  the kernel SPI subsystem (spi-bcm2835) and a handful of GPIO
+	  descriptors obtained from device tree, which makes it portable
+	  across all Raspberry Pi models (Pi 1 through Pi 5).
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called cberryfb.

@@ -1,192 +1,241 @@
 cberryfb
 ========
 
-Linux framebuffer driver for the admatec C-Berry LCD module
+Linux framebuffer driver for the admatec C-Berry 320×240 LCD.
 
+> Sterownik został przepisany pod współczesne API jądra (≥ 6.6):
+> jest `spi_driver`em wiązanym z urządzeniem przez **Device Tree**,
+> używa GPIO descriptors (`gpiod`) i nowych helperów framebuffera
+> dla pamięci systemowej (`FB_GEN_DEFAULT_DEFERRED_SYSMEM_OPS`).
+> Działa przenośnie na **Raspberry Pi 1 – Pi 5** (32-bit i 64-bit).
 
-## installation (cross compile on Linux)
 
-for other platforms or distribution specific info follow the instructions on http://elinux.org/RPi_Kernel_Compilation
+## Instalacja (natywnie na Raspberry Pi)
 
+Instrukcja dla Raspberry Pi OS **Bookworm** (jądro 6.x).
+Wszystkie polecenia wykonujemy bezpośrednio na Pi.
 
-### setup the compiler
+### 1. Zależności
 
-set the build directory. (you can change the path as you like)
+```bash
+sudo apt update
+sudo apt install -y raspberrypi-kernel-headers build-essential \
+                    device-tree-compiler git
+```
 
-    export BUILD_DIR=~/pi
+> Pakiet `raspberrypi-kernel-headers` instaluje nagłówki jądra
+> dopasowane do aktualnie uruchomionego `uname -r` w
+> `/lib/modules/$(uname -r)/build`.
 
-create the build directory.
+### 2. Pobranie i kompilacja
 
-    mkdir $BUILD_DIR
-    cd $BUILD_DIR
+```bash
+git clone https://github.com/uvoelkel/cberryfb.git
+cd cberryfb
+make
+```
 
+Kompilacja zajmuje kilka–kilkanaście sekund (sam moduł i overlay,
+nie całe jądro).
 
-download the pre-built bmc2708 compiler.
+### 3. Instalacja
 
-    git clone git://github.com/raspberrypi/tools.git --depth 1
+```bash
+sudo make install
+```
 
+Cel `install` kopiuje:
 
-set the cross compiler prefix.
+- `cberryfb.ko`  → `/lib/modules/$(uname -r)/extra/`
+- `cberry.dtbo` → `/boot/firmware/overlays/` (lub `/boot/overlays/` na
+  starszych systemach — wykrywane automatycznie)
 
-    export CCPREFIX=$BUILD_DIR/tools/arm-bcm2708/arm-bcm2708-linux-gnueabi/bin/arm-bcm2708-linux-gnueabi-
+i odświeża zależności (`depmod -a`).
 
+### 4. Włączenie SPI i overlay'a
 
-### get the kernel source
+W `/boot/firmware/config.txt` (Bookworm) lub `/boot/config.txt` (starsze)
+dodaj:
 
-    git clone --depth 1 git://github.com/raspberrypi/linux.git
+```
+dtparam=spi=on
+dtoverlay=cberry
+```
 
+Krócej:
 
+```bash
+BOOT=/boot/firmware; [ -d $BOOT ] || BOOT=/boot
+echo "dtparam=spi=on"   | sudo tee -a $BOOT/config.txt
+echo "dtoverlay=cberry" | sudo tee -a $BOOT/config.txt
+```
 
-### configure the kernel
+### 5. Reboot
 
-get the pi's current kernel config (execute on the pi).
+```bash
+sudo reboot
+```
 
-    ssh root@pi
-    zcat /proc/config.gz > /root/config
-    exit
+Po starcie:
 
+```bash
+dmesg | grep -i cberry
+ls /dev/fb*
+```
 
-you could use https://github.com/Hexxeh/rpi-update to update to the latest kernel.
-this way you might not have to update as much kernel options in the next step as with the older kernel. but it is really not necessary.
+Powinno pojawić się urządzenie `fb1` (lub kolejny dostępny indeks)
+oraz wpis `admatec C-Berry LCD framebuffer device`.
 
 
-copy the config to your build directory (execute on the build machine)
+## Aktualizacja / odinstalowanie
 
-    scp root@pi:/root/config linux/.config
+Aktualizacja po `git pull`:
 
+```bash
+make clean && make && sudo make install
+sudo modprobe -r cberryfb && sudo modprobe cberryfb
+```
 
+Pełna deinstalacja:
 
-update the kernel config (make sure the above mentioned cross compiler prefix is exported)
+```bash
+sudo make uninstall
+sudo reboot
+```
 
-    cd $BUILD_DIR/linux
-    make ARCH=arm CROSS_COMPILE=${CCPREFIX} oldconfig
 
+## Użycie
 
-### add cberryfb
+Automatyczne ładowanie modułu po starcie:
 
-get the cberryfb source
+```bash
+echo cberryfb | sudo tee /etc/modules-load.d/cberryfb.conf
+```
 
-    git clone https://github.com/u-voelkel/cberryfb.git drivers/video/cberryfb/
+### X-server
 
-
-append to `drivers/video/Makefile`
-
-    obj-$(CONFIG_FB_CBERRY)		  += cberryfb/
-
-append to `drivers/video/Kconfig` (before `endmenu`)
-
-    source "drivers/video/cberryfb/Kconfig"
-
-
-select the driver
-
-    make ARCH=arm CROSS_COMPILE=${CCPREFIX} menuconfig
-    → Device Drivers → Graphics support
-    <M> C-Berry LCD frame buffer support
-    Exit and save
-
-
-note: you could also add the cberry sources before the `make oldconfig` step and then select the module when running it.
-
-
-
-### compile the kernel
-
-simply run
-
-    make ARCH=arm CROSS_COMPILE=${CCPREFIX}
-    make ARCH=arm CROSS_COMPILE=${CCPREFIX} modules
-
-if you have multiple cpus or cores you can use the `-j` option to make use of them. a rule of thumb is number of cpus/cores + 1. so on a dual core machine it would be
-
-    make -j 3 ARCH=arm CROSS_COMPILE=${CCPREFIX}
-
-go get yourself a coffee or a sandwich. It might take some time.
-
-
-
-### install the kernel
-
-first you should backup the existing kernel on the pi.
-
-    cd /boot
-    mv kernel.img kernel_old.img
-
-copy the kernel to the pi.
-
-    scp $BUILD_DIR/linux/arch/arm/boot/zImage root@pi:/boot/kernel.img
-
-
-
-### install the modules
-
-install the modules in a temporary directory.
-
-    export MODULES_TEMP=$BUILD_DIR/modules
-    mkdir $MODULES_TEMP
-    make ARCH=arm CROSS_COMPILE=${CCPREFIX} INSTALL_MOD_PATH=${MODULES_TEMP} modules_install
-
-
-copy the modules to the pi
-
-    rsync --progress -a --no-l -vhe ssh $BUILD_DIR/modules/lib/ root@pi:/lib/
-
-
-### done
-
-you are done. reboot the pi to use the new kernel.
-
-    shutdown -r now
-
-
-## usage
-
-the module is called "cberryfb"
-
-    modprobe cberryfb
-    dmesg
-
-the last line should look like this: `fb1: admatec C-Berry LCD framebuffer device`
-
-
-### run the X-server
-
-    FRAMEBUFFER=/dev/fb1 startx
-
-note: you might need to remove the fbturbo driver first
-
-    apt-get remove xserver-xorg-video-fbturbo
-
+```bash
+FRAMEBUFFER=/dev/fb1 startx
+```
 
 ### mplayer
 
-    mplayer -nolirc -vo fbdev2:/dev/fb1 -vf scale=320:-3 video.mpg
+```bash
+mplayer -nolirc -vo fbdev2:/dev/fb1 -vf scale=320:-3 video.mpg
+```
 
-### display an image using fbi
+### Wyświetlenie obrazu (fbi)
 
-    fbi -d /dev/fb1 -T 1 -noverbose -a image.bmp
+```bash
+sudo fbi -d /dev/fb1 -T 1 -noverbose -a image.bmp
+```
 
-### console
+### Mapowanie konsoli
 
-to map console 1 to fb1 execute 
-   
-    con2fbmap 1 1
+```bash
+con2fbmap 1 1   # konsola 1 -> fb1
+con2fbmap 1 0   # przywróć fb0
+```
 
-to map console 1 back to fb0 execute
+### Podświetlenie
 
-    con2fbmap 1 0
+```bash
+cat /sys/class/backlight/cberryfb/actual_brightness
+cat /sys/class/backlight/cberryfb/max_brightness
 
-
-
-
-### backlight
-You can control the backlight using the files under `/sys/class/backlight/cberryfb/`
-
-    cat /sys/class/backlight/cberryfb/actual_brightness
-    cat /sys/class/backlight/cberryfb/max_brightness
-
-    echo 100 > /sys/class/backlight/cberryfb/brightness
-    echo 0 > /sys/class/backlight/cberryfb/brightness
-    echo 255 > /sys/class/backlight/cberryfb/brightness
+echo 100 | sudo tee /sys/class/backlight/cberryfb/brightness
+echo 0   | sudo tee /sys/class/backlight/cberryfb/brightness
+echo 255 | sudo tee /sys/class/backlight/cberryfb/brightness
+```
 
 
+## Device Tree overlay
+
+Repozytorium zawiera nakładkę [cberry.dts](cberry.dts), kompilowaną
+automatycznie przez `make` do `cberry.dtbo`. Overlay:
+
+- konfiguruje wpis pod `spi0.1` (CE1) i wyłącza domyślny `spidev1`,
+- definiuje GPIO sterujące LCD (OE, RS, CS, WR, RESET, opcjonalnie WAIT),
+- podaje `compatible = "admatec,cberry"`, dzięki czemu
+  `cberryfb` wiąże się automatycznie po załadowaniu modułu.
+
+
+## Diagnostyka
+
+```bash
+modinfo cberryfb              # m.in. vermagic
+ls /dev/spidev*               # czy SPI działa
+dtoverlay -l                  # wczytane overlay'e
+dmesg | grep -Ei 'cberry|spi|fb'
+```
+
+Najczęstsze problemy:
+
+| Objaw                                     | Prawdopodobna przyczyna                                |
+|-------------------------------------------|--------------------------------------------------------|
+| `modprobe: ERROR: could not insert ...`   | Niezgodne `vermagic` — `make clean && make` po update'cie jądra |
+| Brak `/dev/fb1`                           | Brak `dtoverlay=cberry` w `config.txt` lub SPI wyłączony |
+| Czarny ekran, ale `/dev/fb1` jest         | Sprawdź podświetlenie: `echo 255 \| sudo tee /sys/class/backlight/cberryfb/brightness` |
+
+
+## Parametry modułu
+
+```bash
+modinfo -p cberryfb
+```
+
+- `fps` — częstotliwość odświeżania deferred-IO (domyślnie 20).
+
+Ustawianie przy ładowaniu:
+
+```bash
+sudo modprobe cberryfb fps=30
+```
+
+lub na stałe w `/etc/modprobe.d/cberryfb.conf`:
+
+```
+options cberryfb fps=30
+```
+
+
+## Zaawansowane: cross-compile na komputerze deweloperskim
+
+Jeśli chcesz budować moduł poza Pi (np. na macOS / x86 Linuksie),
+w repo są pliki [Dockerfile.cross](Dockerfile.cross) oraz
+[build-cross.sh](build-cross.sh). Skrypt łączy się przez SSH do Pi,
+odczytuje `uname -r`/`uname -m`/model, dobiera odpowiednią gałąź jądra
+i toolchain, buduje moduł w kontenerze i weryfikuje `vermagic`.
+
+Większość użytkowników tego nie potrzebuje — natywne `make` na Pi
+z `raspberrypi-kernel-headers` wystarczy.
+
+
+## Zaawansowane: wbudowanie w drzewo jądra
+
+Jeśli budujesz całe jądro od zera, dodaj sterownik do tree:
+
+```bash
+git clone https://github.com/uvoelkel/cberryfb.git \
+    drivers/video/fbdev/cberryfb
+```
+
+W `drivers/video/fbdev/Makefile` dopisz:
+
+```make
+obj-\$(CONFIG_FB_CBERRY)   += cberryfb/
+```
+
+W `drivers/video/fbdev/Kconfig` (przed `endmenu`):
+
+```kconfig
+source "drivers/video/fbdev/cberryfb/Kconfig"
+```
+
+Potem `make menuconfig` → *Device Drivers* → *Graphics support*
+→ *Frame buffer Devices* → `<M> C-Berry LCD frame buffer support`.
+
+
+## Licencja
+
+GPLv2 (zgodnie z modułem jądra Linux).

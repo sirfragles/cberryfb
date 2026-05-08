@@ -1,0 +1,22 @@
+## Build artifacts
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+*.symvers
+*.order
+.tmp_versions/
+modules.order
+Module.symvers
+*.dtbo
+build.log
+out/
+
+## macOS
+.DS_Store
+
+## Editors
+.vscode/
+.idea/
+*.swp
